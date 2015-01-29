@@ -63,7 +63,7 @@ namespace Microsoft.AspNet.Mvc
                 bindingContext.ModelMetadata,
                 containerMetadata: null,
                 excludeFromValidationFilters: _bodyValidationExcludeFiltersProvider.ExcludeFilters);
-            _bodyModelValidator.Validate(validationContext, bindingContext.ModelName);
+            //_bodyModelValidator.Validate(validationContext, bindingContext.ModelName);
             return true;
         }
     }

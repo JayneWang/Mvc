@@ -117,9 +117,14 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
                 return;
             }
 
-            ValidateChildren(validationContext);
-            ValidateThis(validationContext, parentNode);
 
+            // Only validate if the type is not excluded already.
+            if (!IsTypeExcludedFromValidation(validationContext.ExcludeFromValidationFilters, ModelMetadata.ModelType))
+            {
+                ValidateChildren(validationContext);
+            }
+
+            ValidateThis(validationContext, parentNode);
             // post-validation steps
             var validatedEventArgs = new ModelValidatedEventArgs(validationContext, parentNode);
             OnValidated(validatedEventArgs);
@@ -132,6 +137,17 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
             }
         }
 
+        private bool IsTypeExcludedFromValidation(
+          IReadOnlyList<IExcludeTypeValidationFilter> filters, Type type)
+        {
+            if (filters == null)
+            {
+                return false;
+            }
+
+            return filters.Any(filter => filter.IsTypeExcluded(type));
+        }
+
         private void ValidateChildren(ModelValidationContext validationContext)
         {
             for (var i = 0; i < _childNodes.Count; i++)
@@ -141,9 +157,12 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
                 child.Validate(childValidationContext, this);
             }
 
-            if (ValidateAllProperties)
+            if (!IsTypeExcludedFromValidation(validationContext.ExcludeFromValidationFilters, ModelMetadata.ModelType))
             {
-                ValidateProperties(validationContext);
+                if (ValidateAllProperties)
+                {
+                    ValidateProperties(validationContext);
+                }
             }
         }
 

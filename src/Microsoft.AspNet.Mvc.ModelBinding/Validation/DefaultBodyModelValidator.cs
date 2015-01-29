@@ -160,36 +160,44 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
             [NotNull] IEnumerable<IModelValidator> validators)
         {
             var isValid = true;
-            string modelKey = null;
 
             // When the are no validators we bail quickly. This saves a GetEnumerator allocation.
             // In a large array (tens of thousands or more) scenario it's very significant.
-            var validatorsAsCollection = validators as ICollection;
-            if (validatorsAsCollection != null && validatorsAsCollection.Count == 0)
-            {
-                return isValid;
-            }
+            //var validatorsAsCollection = validators as ICollection;
+            //if (validatorsAsCollection != null && validatorsAsCollection.Count == 0)
+            //{
+            //    return isValid;
+            //}
 
             var modelValidationContext =
                     new ModelValidationContext(validationContext.ModelValidationContext, metadata);
-            foreach (var validator in validators)
+            var modelKey = validationContext.RootPrefix;
+            // This constructs the object heirarchy
+            // Example: prefix.Parent.Child
+            foreach (var keyBuilder in validationContext.KeyBuilders.Reverse())
             {
-                foreach (var error in validator.Validate(modelValidationContext))
-                {
-                    if (modelKey == null)
-                    {
-                        modelKey = validationContext.RootPrefix;
-                        // This constructs the object heirarchy
-                        // Example: prefix.Parent.Child
-                        foreach (var keyBuilder in validationContext.KeyBuilders.Reverse())
-                        {
-                            modelKey = keyBuilder.AppendTo(modelKey);
-                        }
-                    }
+                modelKey = keyBuilder.AppendTo(modelKey);
+            }
 
-                    var errorKey = ModelBindingHelper.CreatePropertyModelName(modelKey, error.MemberName);
-                    validationContext.ModelValidationContext.ModelState.AddModelError(errorKey, error.Message);
-                    isValid = false;
+            var modelState = validationContext.ModelValidationContext.ModelState;
+            var validationState = modelState.GetFieldValidationState(modelKey);
+            if (validationState == ModelValidationState.Unvalidated ||
+                validationState == ModelValidationState.Valid && metadata.Container == null)
+            {
+                foreach (var validator in validators)
+                {
+                    foreach (var error in validator.Validate(modelValidationContext))
+                    {
+                        var errorKey = ModelBindingHelper.CreatePropertyModelName(modelKey, error.MemberName);
+                        modelState.AddModelError(errorKey, error.Message);
+                        isValid = false;
+                    }
+                }
+
+                if (isValid)
+                {
+                    // If a node or its subtree were not marked invalid, we can consider it valid at this point.
+                    modelState.MarkFieldValid(modelKey);
                 }
             }
 

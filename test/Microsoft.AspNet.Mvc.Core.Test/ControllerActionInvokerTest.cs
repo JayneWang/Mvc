@@ -1995,6 +1995,7 @@ namespace Microsoft.AspNet.Mvc
                 new MockModelBinderProvider(),
                 new MockModelValidatorProviderProvider(),
                 new MockValueProviderFactoryProvider(),
+                Mock.Of<IValidationExcludeFiltersProvider>(),
                 new MockScopedInstance<ActionBindingContext>());
 
             return invoker;
@@ -2047,6 +2048,7 @@ namespace Microsoft.AspNet.Mvc
                 new MockModelBinderProvider() { ModelBinders = new List<IModelBinder>() { binder.Object } },
                 new MockModelValidatorProviderProvider(),
                 new MockValueProviderFactoryProvider(),
+                Mock.Of<IValidationExcludeFiltersProvider>(),
                 new MockScopedInstance<ActionBindingContext>());
 
             // Act
@@ -2144,6 +2146,7 @@ namespace Microsoft.AspNet.Mvc
                 IModelBinderProvider modelBinderProvider,
                 IModelValidatorProviderProvider modelValidatorProviderProvider,
                 IValueProviderFactoryProvider valueProviderFactoryProvider,
+                IValidationExcludeFiltersProvider validationExcludeFiltersProvider,
                 IScopedInstance<ActionBindingContext> actionBindingContext)
                 : base(
                       actionContext,
@@ -2155,6 +2158,7 @@ namespace Microsoft.AspNet.Mvc
                       modelBinderProvider,
                       modelValidatorProviderProvider,
                       valueProviderFactoryProvider,
+                      validationExcludeFiltersProvider,
                       actionBindingContext)
             {
                 ControllerFactory = controllerFactory;

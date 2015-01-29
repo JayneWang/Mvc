@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using Microsoft.Framework.DependencyInjection;
 
 namespace Microsoft.AspNet.Mvc.ModelBinding
 {
@@ -18,17 +19,28 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
     /// </remarks>
     public class CompositeModelBinder : ICompositeModelBinder
     {
+        public CompositeModelBinder([NotNull] IEnumerable<IModelBinder> modelBinders) :
+            this(modelBinders, validationExcludeFilters:null)
+        {
+        }
+
         /// <summary>
         /// Initializes a new instance of the CompositeModelBinder class.
         /// </summary>
         /// <param name="modelBinders">A collection of <see cref="IModelBinder"/> instances.</param>
-        public CompositeModelBinder([NotNull] IEnumerable<IModelBinder> modelBinders)
+        /// <param name="validationExcludeFiltersProvider">
+        /// A type which can provide <see cref="IValidationExcludeFiltersProvider.ExcludeFilters"/>.</param>
+        public CompositeModelBinder([NotNull] IEnumerable<IModelBinder> modelBinders,
+                                    [NotNull] IEnumerable<IExcludeTypeValidationFilter> validationExcludeFilters)
         {
             ModelBinders = new List<IModelBinder>(modelBinders);
+            ValidationExcludeFilters = new List<IExcludeTypeValidationFilter>(validationExcludeFilters);
         }
 
         /// <inheritdoc />
         public IReadOnlyList<IModelBinder> ModelBinders { get; }
+
+        public IReadOnlyList<IExcludeTypeValidationFilter> ValidationExcludeFilters { get; set; }
 
         public virtual async Task<bool> BindModelAsync([NotNull] ModelBindingContext bindingContext)
         {
@@ -67,14 +79,18 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
                                                                                bindingContext.ModelName);
                 }
 
+                var bodyValidator = newBindingContext.OperationBindingContext.HttpContext.RequestServices.GetRequiredService<IBodyModelValidator>();
                 var validationContext = new ModelValidationContext(
                     bindingContext.OperationBindingContext.MetadataProvider,
                     bindingContext.OperationBindingContext.ValidatorProvider,
                     bindingContext.ModelState,
                     bindingContext.ModelMetadata,
-                    containerMetadata: null);
+                    containerMetadata: null,
+                    excludeFromValidationFilters: ValidationExcludeFilters);
 
-                newBindingContext.ValidationNode.Validate(validationContext, parentNode: null);
+                bodyValidator.Validate(validationContext, newBindingContext.ValidationNode.ModelStateKey);
+
+                //newBindingContext.ValidationNode.Validate(validationContext, parentNode: null);
             }
 
             bindingContext.OperationBindingContext.BodyBindingState =
