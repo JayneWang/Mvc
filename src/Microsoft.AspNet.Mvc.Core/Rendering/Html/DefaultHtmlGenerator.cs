@@ -75,7 +75,17 @@ namespace Microsoft.AspNet.Mvc.Rendering
             object routeValues,
             object htmlAttributes)
         {
-            var url = _urlHelper.Action(actionName, controllerName, routeValues, protocol, hostname, fragment);
+            var url = _urlHelper.Action(
+                new UrlActionContext()
+                {
+                    Action = actionName,
+                    Controller = controllerName,
+                    Values = routeValues,
+                    Protocol = protocol,
+                    Host = hostname,
+                    Fragment = fragment
+                });
+
             return GenerateLink(linkText, url, htmlAttributes);
         }
 
@@ -193,7 +203,11 @@ namespace Microsoft.AspNet.Mvc.Rendering
             object htmlAttributes)
         {
             var action =
-                _urlHelper.RouteUrl(routeName, values: routeValues, protocol: null, host: null, fragment: null);
+                _urlHelper.RouteUrl(new UrlRouteContext()
+                {
+                    RouteName = routeName,
+                    Values = routeValues
+                });
 
             return GenerateFormCore(viewContext, action, method, htmlAttributes);
         }
@@ -354,7 +368,15 @@ namespace Microsoft.AspNet.Mvc.Rendering
             object routeValues,
             object htmlAttributes)
         {
-            var url = _urlHelper.RouteUrl(routeName, routeValues, protocol, hostName, fragment);
+            var url = _urlHelper.RouteUrl(new UrlRouteContext()
+            {
+                RouteName = routeName,
+                Values = routeValues,
+                Protocol = protocol,
+                Host = hostName,
+                Fragment = fragment
+            });
+
             return GenerateLink(linkText, url, htmlAttributes);
         }
 
@@ -854,58 +876,58 @@ namespace Microsoft.AspNet.Mvc.Rendering
             var usedModelState = false;
             switch (inputType)
             {
-                case InputType.CheckBox:
-                    var modelStateWasChecked = GetModelStateValue(viewContext, fullName, typeof(bool)) as bool?;
-                    if (modelStateWasChecked.HasValue)
+            case InputType.CheckBox:
+                var modelStateWasChecked = GetModelStateValue(viewContext, fullName, typeof(bool)) as bool?;
+                if (modelStateWasChecked.HasValue)
+                {
+                    isChecked = modelStateWasChecked.Value;
+                    usedModelState = true;
+                }
+
+                goto case InputType.Radio;
+
+            case InputType.Radio:
+                if (!usedModelState)
+                {
+                    var modelStateValue = GetModelStateValue(viewContext, fullName, typeof(string)) as string;
+                    if (modelStateValue != null)
                     {
-                        isChecked = modelStateWasChecked.Value;
+                        isChecked = string.Equals(modelStateValue, valueParameter, StringComparison.Ordinal);
                         usedModelState = true;
                     }
+                }
 
-                    goto case InputType.Radio;
+                if (!usedModelState && useViewData)
+                {
+                    isChecked = EvalBoolean(viewContext, fullName);
+                }
 
-                case InputType.Radio:
-                    if (!usedModelState)
-                    {
-                        var modelStateValue = GetModelStateValue(viewContext, fullName, typeof(string)) as string;
-                        if (modelStateValue != null)
-                        {
-                            isChecked = string.Equals(modelStateValue, valueParameter, StringComparison.Ordinal);
-                            usedModelState = true;
-                        }
-                    }
+                if (isChecked)
+                {
+                    tagBuilder.MergeAttribute("checked", "checked");
+                }
 
-                    if (!usedModelState && useViewData)
-                    {
-                        isChecked = EvalBoolean(viewContext, fullName);
-                    }
+                tagBuilder.MergeAttribute("value", valueParameter, isExplicitValue);
+                break;
 
-                    if (isChecked)
-                    {
-                        tagBuilder.MergeAttribute("checked", "checked");
-                    }
-
+            case InputType.Password:
+                if (value != null)
+                {
                     tagBuilder.MergeAttribute("value", valueParameter, isExplicitValue);
-                    break;
+                }
 
-                case InputType.Password:
-                    if (value != null)
-                    {
-                        tagBuilder.MergeAttribute("value", valueParameter, isExplicitValue);
-                    }
+                break;
 
-                    break;
+            case InputType.Text:
+            default:
+                var attributeValue = (string)GetModelStateValue(viewContext, fullName, typeof(string));
+                if (attributeValue == null)
+                {
+                    attributeValue = useViewData ? EvalString(viewContext, fullName, format) : valueParameter;
+                }
 
-                case InputType.Text:
-                default:
-                    var attributeValue = (string)GetModelStateValue(viewContext, fullName, typeof(string));
-                    if (attributeValue == null)
-                    {
-                        attributeValue = useViewData ? EvalString(viewContext, fullName, format) : valueParameter;
-                    }
-
-                    tagBuilder.MergeAttribute("value", attributeValue, replaceExisting: isExplicitValue);
-                    break;
+                tagBuilder.MergeAttribute("value", attributeValue, replaceExisting: isExplicitValue);
+                break;
             }
 
             if (setId)
@@ -996,18 +1018,18 @@ namespace Microsoft.AspNet.Mvc.Rendering
         {
             switch (inputType)
             {
-                case InputType.CheckBox:
-                    return "checkbox";
-                case InputType.Hidden:
-                    return "hidden";
-                case InputType.Password:
-                    return "password";
-                case InputType.Radio:
-                    return "radio";
-                case InputType.Text:
-                    return "text";
-                default:
-                    return "text";
+            case InputType.CheckBox:
+                return "checkbox";
+            case InputType.Hidden:
+                return "hidden";
+            case InputType.Password:
+                return "password";
+            case InputType.Radio:
+                return "radio";
+            case InputType.Text:
+                return "text";
+            default:
+                return "text";
             }
         }
 
