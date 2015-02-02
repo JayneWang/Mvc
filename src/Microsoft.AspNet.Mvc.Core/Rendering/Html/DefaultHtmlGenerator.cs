@@ -876,58 +876,58 @@ namespace Microsoft.AspNet.Mvc.Rendering
             var usedModelState = false;
             switch (inputType)
             {
-            case InputType.CheckBox:
-                var modelStateWasChecked = GetModelStateValue(viewContext, fullName, typeof(bool)) as bool?;
-                if (modelStateWasChecked.HasValue)
-                {
-                    isChecked = modelStateWasChecked.Value;
-                    usedModelState = true;
-                }
-
-                goto case InputType.Radio;
-
-            case InputType.Radio:
-                if (!usedModelState)
-                {
-                    var modelStateValue = GetModelStateValue(viewContext, fullName, typeof(string)) as string;
-                    if (modelStateValue != null)
+                case InputType.CheckBox:
+                    var modelStateWasChecked = GetModelStateValue(viewContext, fullName, typeof(bool)) as bool?;
+                    if (modelStateWasChecked.HasValue)
                     {
-                        isChecked = string.Equals(modelStateValue, valueParameter, StringComparison.Ordinal);
+                        isChecked = modelStateWasChecked.Value;
                         usedModelState = true;
                     }
-                }
 
-                if (!usedModelState && useViewData)
-                {
-                    isChecked = EvalBoolean(viewContext, fullName);
-                }
+                    goto case InputType.Radio;
 
-                if (isChecked)
-                {
-                    tagBuilder.MergeAttribute("checked", "checked");
-                }
+                case InputType.Radio:
+                    if (!usedModelState)
+                    {
+                        var modelStateValue = GetModelStateValue(viewContext, fullName, typeof(string)) as string;
+                        if (modelStateValue != null)
+                        {
+                            isChecked = string.Equals(modelStateValue, valueParameter, StringComparison.Ordinal);
+                            usedModelState = true;
+                        }
+                    }
 
-                tagBuilder.MergeAttribute("value", valueParameter, isExplicitValue);
-                break;
+                    if (!usedModelState && useViewData)
+                    {
+                        isChecked = EvalBoolean(viewContext, fullName);
+                    }
 
-            case InputType.Password:
-                if (value != null)
-                {
+                    if (isChecked)
+                    {
+                        tagBuilder.MergeAttribute("checked", "checked");
+                    }
+
                     tagBuilder.MergeAttribute("value", valueParameter, isExplicitValue);
-                }
+                    break;
 
-                break;
+                case InputType.Password:
+                    if (value != null)
+                    {
+                        tagBuilder.MergeAttribute("value", valueParameter, isExplicitValue);
+                    }
 
-            case InputType.Text:
-            default:
-                var attributeValue = (string)GetModelStateValue(viewContext, fullName, typeof(string));
-                if (attributeValue == null)
-                {
-                    attributeValue = useViewData ? EvalString(viewContext, fullName, format) : valueParameter;
-                }
+                    break;
 
-                tagBuilder.MergeAttribute("value", attributeValue, replaceExisting: isExplicitValue);
-                break;
+                case InputType.Text:
+                default:
+                    var attributeValue = (string)GetModelStateValue(viewContext, fullName, typeof(string));
+                    if (attributeValue == null)
+                    {
+                        attributeValue = useViewData ? EvalString(viewContext, fullName, format) : valueParameter;
+                    }
+
+                    tagBuilder.MergeAttribute("value", attributeValue, replaceExisting: isExplicitValue);
+                    break;
             }
 
             if (setId)
