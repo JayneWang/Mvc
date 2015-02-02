@@ -1018,18 +1018,18 @@ namespace Microsoft.AspNet.Mvc.Rendering
         {
             switch (inputType)
             {
-            case InputType.CheckBox:
-                return "checkbox";
-            case InputType.Hidden:
-                return "hidden";
-            case InputType.Password:
-                return "password";
-            case InputType.Radio:
-                return "radio";
-            case InputType.Text:
-                return "text";
-            default:
-                return "text";
+                case InputType.CheckBox:
+                    return "checkbox";
+                case InputType.Hidden:
+                    return "hidden";
+                case InputType.Password:
+                    return "password";
+                case InputType.Radio:
+                    return "radio";
+                case InputType.Text:
+                    return "text";
+                default:
+                    return "text";
             }
         }
 
