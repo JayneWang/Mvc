@@ -54,16 +54,6 @@ namespace Microsoft.AspNet.Mvc
             }
 
             bindingContext.Model = await formatter.ReadAsync(formatterContext);
-
-            // Validate the deserialized object
-            var validationContext = new ModelValidationContext(
-                bindingContext.OperationBindingContext.MetadataProvider,
-                bindingContext.OperationBindingContext.ValidatorProvider,
-                bindingContext.ModelState,
-                bindingContext.ModelMetadata,
-                containerMetadata: null,
-                excludeFromValidationFilters: _bodyValidationExcludeFiltersProvider.ExcludeFilters);
-            //_bodyModelValidator.Validate(validationContext, bindingContext.ModelName);
             return true;
         }
     }

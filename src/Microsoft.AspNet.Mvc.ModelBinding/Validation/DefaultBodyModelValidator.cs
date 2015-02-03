@@ -30,11 +30,11 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
                 RootPrefix = keyPrefix
             };
 
-            return ValidateNonVisitedNodeAndChildren(metadata, validationContext, validators: null);
+            return ValidateNonVisitedNodeAndChildren(metadata, validationContext, keyPrefix, validators: null);
         }
 
         private bool ValidateNonVisitedNodeAndChildren(
-            ModelMetadata metadata, ValidationContext validationContext, IEnumerable<IModelValidator> validators)
+            ModelMetadata metadata, ValidationContext validationContext, string modelKey, IEnumerable<IModelValidator> validators)
         {
             // Recursion guard to avoid stack overflows
             RuntimeHelpers.EnsureSufficientExecutionStack();
@@ -48,10 +48,11 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
                 validators = validationContext.ModelValidationContext.ValidatorProvider.GetValidators(metadata);
             }
 
+            var modelState = validationContext.ModelValidationContext.ModelState;
             // We don't need to recursively traverse the graph for null values
             if (metadata.Model == null)
             {
-                return ShallowValidate(metadata, validationContext, validators);
+                return ShallowValidate(modelKey, metadata, validationContext, validators);
             }
 
             // We don't need to recursively traverse the graph for types that shouldn't be validated
@@ -60,7 +61,7 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
                 validationContext.ModelValidationContext.ExcludeFromValidationFilters,
                 modelType))
             {
-                return ShallowValidate(metadata, validationContext, validators);
+                return ShallowValidate(modelKey, metadata, validationContext, validators);
             }
 
             // Check to avoid infinite recursion. This can happen with cycles in an object graph.
@@ -75,36 +76,37 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
             var enumerableModel = metadata.Model as IEnumerable;
             if (enumerableModel == null)
             {
-                isValid = ValidateProperties(metadata, validationContext);
+                isValid = ValidateProperties(modelKey, metadata, validationContext);
             }
             else
             {
-                isValid = ValidateElements(enumerableModel, validationContext);
+                isValid = ValidateElements(modelKey, enumerableModel, validationContext);
             }
 
             if (isValid)
             {
                 // Don't bother to validate this node if children failed.
-                isValid = ShallowValidate(metadata, validationContext, validators);
+                isValid = ShallowValidate(modelKey, metadata, validationContext, validators);
             }
 
             // Pop the object so that it can be validated again in a different path
             validationContext.Visited.Remove(metadata.Model);
-
             return isValid;
         }
 
-        private bool ValidateProperties(ModelMetadata metadata, ValidationContext validationContext)
+        private bool ValidateProperties(string currentModelKey, ModelMetadata metadata, ValidationContext validationContext)
         {
             var isValid = true;
             var propertyScope = new PropertyScope();
             validationContext.KeyBuilders.Push(propertyScope);
+
             foreach (var childMetadata in
                 validationContext.ModelValidationContext.MetadataProvider.GetMetadataForProperties(
                     metadata.Model, metadata.RealModelType))
             {
+                var childKey = ModelBindingHelper.CreatePropertyModelName(currentModelKey, childMetadata.PropertyName);
                 propertyScope.PropertyName = childMetadata.PropertyName;
-                if (!ValidateNonVisitedNodeAndChildren(childMetadata, validationContext, validators: null))
+                if (!ValidateNonVisitedNodeAndChildren(childMetadata, validationContext, childKey, validators: null))
                 {
                     isValid = false;
                 }
@@ -114,7 +116,7 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
             return isValid;
         }
 
-        private bool ValidateElements(IEnumerable model, ValidationContext validationContext)
+        private bool ValidateElements(string currentKey, IEnumerable model, ValidationContext validationContext)
         {
             var isValid = true;
             var elementType = GetElementType(model.GetType());
@@ -139,7 +141,7 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
                 {
                     elementMetadata.Model = element;
 
-                    if (!ValidateNonVisitedNodeAndChildren(elementMetadata, validationContext, validators))
+                    if (!ValidateNonVisitedNodeAndChildren(elementMetadata, validationContext, ModelBindingHelper.CreateIndexModelName(currentKey, elementScope.Index), validators))
                     {
                         isValid = false;
                     }
@@ -155,6 +157,7 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
         // Validates a single node (not including children)
         // Returns true if validation passes successfully
         private static bool ShallowValidate(
+            string modelKey,
             ModelMetadata metadata,
             ValidationContext validationContext,
             [NotNull] IEnumerable<IModelValidator> validators)
@@ -163,42 +166,38 @@ namespace Microsoft.AspNet.Mvc.ModelBinding
 
             // When the are no validators we bail quickly. This saves a GetEnumerator allocation.
             // In a large array (tens of thousands or more) scenario it's very significant.
-            //var validatorsAsCollection = validators as ICollection;
-            //if (validatorsAsCollection != null && validatorsAsCollection.Count == 0)
-            //{
-            //    return isValid;
-            //}
-
-            var modelValidationContext =
-                    new ModelValidationContext(validationContext.ModelValidationContext, metadata);
-            var modelKey = validationContext.RootPrefix;
-            // This constructs the object heirarchy
-            // Example: prefix.Parent.Child
-            foreach (var keyBuilder in validationContext.KeyBuilders.Reverse())
+            var validatorsAsCollection = validators as ICollection;
+            if (validatorsAsCollection != null && validatorsAsCollection.Count == 0)
             {
-                modelKey = keyBuilder.AppendTo(modelKey);
+                isValid = true;
             }
-
-            var modelState = validationContext.ModelValidationContext.ModelState;
-            var validationState = modelState.GetFieldValidationState(modelKey);
-            if (validationState == ModelValidationState.Unvalidated ||
-                validationState == ModelValidationState.Valid && metadata.Container == null)
+            else
             {
-                foreach (var validator in validators)
+                var modelValidationContext =
+                        new ModelValidationContext(validationContext.ModelValidationContext, metadata);
+                var modelState = validationContext.ModelValidationContext.ModelState;
+                var validationState = modelState.GetFieldValidationState(modelKey);
+                if (validationState != ModelValidationState.Invalid) // This represents a type.
                 {
-                    foreach (var error in validator.Validate(modelValidationContext))
+                    foreach (var validator in validators)
                     {
-                        var errorKey = ModelBindingHelper.CreatePropertyModelName(modelKey, error.MemberName);
-                        modelState.AddModelError(errorKey, error.Message);
-                        isValid = false;
+                        foreach (var error in validator.Validate(modelValidationContext))
+                        {
+                            var errorKey = ModelBindingHelper.CreatePropertyModelName(modelKey, error.MemberName);
+                            modelState.AddModelError(errorKey, error.Message);
+                            isValid = false;
+                        }
                     }
                 }
-
-                if (isValid)
+                else
                 {
-                    // If a node or its subtree were not marked invalid, we can consider it valid at this point.
-                    modelState.MarkFieldValid(modelKey);
+                    isValid = false;
                 }
+            }
+
+            if (isValid)
+            {
+                validationContext.ModelValidationContext.ModelState.MarkFieldValid(modelKey);
             }
 
             return isValid;
